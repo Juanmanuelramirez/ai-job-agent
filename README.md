@@ -39,3 +39,83 @@ After deployment, you must update the amplifyConfig object in frontend/auth.html
 
 This project is built to be deployed using the AWS SAM CLI and an AWS CodePipeline. Follow the Guia\_Despliegue\_Pipeline.md for instructions.
 
+
+
+# **Guía de Despliegue Automatizado con AWS Parameter Store**
+
+Esta guía describe el método profesional para desplegar tu aplicación. Usaremos **AWS Systems Manager (SSM) Parameter Store** para gestionar las variables de entorno de forma segura y **AWS CodePipeline** para la automatización.
+
+### **Prerrequisitos**
+
+1. **Repositorio de Código:** Tu proyecto en GitHub (o similar) con el buildspec.yml actualizado que te he proporcionado.  
+2. **Bucket de S3 para Artefactos:** Un bucket de S3 creado para almacenar los paquetes de código (ej. mi-agente-ia-artefactos).
+
+### **Paso 1: Configurar las Variables en Parameter Store**
+
+Este es el paso más importante para la automatización. Aquí centralizas tu configuración.
+
+1. Ve a la consola de AWS y busca el servicio **Systems Manager**.  
+2. En el menú de la izquierda, ve a **"Parameter Store"**.  
+3. Haz clic en **"Crear parámetro"** y crea los siguientes tres parámetros:  
+   * **Parámetro 1: Identidad de SES**  
+     * **Nombre:** /ai-job-agent/prod/ses-identity  
+     * **Tipo:** String  
+     * **Valor:** tu-correo-verificado-en-ses@ejemplo.com  
+     * Haz clic en **"Crear parámetro"**.  
+   * **Parámetro 2: URL del Frontend**  
+     * **Nombre:** /ai-job-agent/prod/frontend-url  
+     * **Tipo:** String  
+     * **Valor:** https://www.tu-dominio-de-produccion.com/auth.html  
+     * Haz clic en **"Crear parámetro"**.  
+   * **Parámetro 3: Bucket de Artefactos**  
+     * **Nombre:** /ai-job-agent/prod/artifact-bucket  
+     * **Tipo:** String  
+     * **Valor:** El nombre de tu bucket de S3 para artefactos (ej. mi-agente-ia-artefactos).  
+     * Haz clic en **"Crear parámetro"**.
+
+### **Paso 2: Crear el Pipeline**
+
+Sigue los pasos del asistente de CodePipeline como antes.
+
+1. **Iniciar el Asistente:** Ve a **CodePipeline**, haz clic en "Crear pipeline", dale un nombre y crea un nuevo rol de servicio.  
+2. **Fase de Origen (Source):** Conecta tu repositorio de GitHub y selecciona la rama main.
+
+### **Paso 3: Configurar la Fase de Build (Con Variables Automatizadas)**
+
+Aquí es donde conectamos el pipeline con Parameter Store.
+
+1. **Proveedor de compilación:** Elige **AWS CodeBuild**.  
+2. Haz clic en **"Crear proyecto"**.  
+   * **Nombre del proyecto:** AI-Job-Agent-Build-Prod.  
+   * **Entorno:** Elige una imagen de Amazon Linux 2 estándar, runtime Python 3.9.  
+   * **Rol de servicio:** Nuevo rol de servicio. **¡Importante\!** Después de crear el rol, tendrás que añadirle permisos para leer desde Parameter Store.  
+   * **Buildspec:** Deja la opción por defecto ("Usar un archivo buildspec").  
+   * **Variables de Entorno (Sección Avanzada):** Aquí está la magia.  
+     * Haz clic en "Añadir variable de entorno".  
+     * **Nombre:** SES\_IDENTITY  
+     * **Valor:** /ai-job-agent/prod/ses-identity  
+     * **Tipo:** Parameter Store  
+     * Repite este proceso para las otras dos variables:  
+       * FRONTEND\_URL \-\> /ai-job-agent/prod/frontend-url  
+       * ARTIFACT\_BUCKET \-\> /ai-job-agent/prod/artifact-bucket  
+3. Haz clic en **"Continuar a CodePipeline"** y luego en **"Siguiente"**.
+
+### **Paso 4: Configurar la Fase de Despliegue (Deploy)**
+
+1. **Proveedor de despliegue:** Elige **AWS CloudFormation**.  
+2. **Acción:** Crear o actualizar una pila.  
+3. **Nombre de la pila:** AI-Job-Agent-Prod-Stack.  
+4. **Nombre de artefacto:** BuildArtifact.  
+5. **Nombre de archivo:** packaged.yaml.  
+6. **Modo de plantilla:** Parámetros.  
+7. **Anulaciones de parámetros (Parameter overrides):** Aquí le pasas los valores desde CodeBuild a CloudFormation.  
+   * En la sección "Anulaciones de parámetros", escribe:
+
+```
+{
+  "SESVerifiedIdentity" : "#{BuildVariables.SES_IDENTITY}",
+  "FrontendProdURL" : "#{BuildVariables.FRONTEND_URL}"
+}
+```
+
+
