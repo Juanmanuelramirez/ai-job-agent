@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ai-job-agent
+  Infraestructura para el Agente de Búsqueda de Empleo con IA
+
+Resources:
+  # --- S3 Buckets ---
+  UserCVsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "ai-job-agent-cvs-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders: ["*"]
+          AllowedMethods: ["PUT", "POST", "GET"]
+          AllowedOrigins: ["*"]
+
+  # --- DynamoDB Tables ---
+  UserSettingsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: UserSettings
+      PrimaryKey:
+        Name: email
+        Type: String
+
+  JobLeadsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: JobLeads
+      PrimaryKey:
+        Name: userEmail
+        Type: String
+      SecondaryIndexes:
+        - IndexName: jobUrl-index
+          PrimaryKey:
+            Name: jobUrl
+            Type: String
+
+  # --- IAM Roles and Policies ---
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - s3:GetObject
+                  - s3:PutObject
+                  - comprehend:DetectEntities
+                  - bedrock:InvokeModel
+                  - ses:SendEmail
+                Resource: "*"
+
+  # --- Lambda Functions ---
+  OrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OrchestratorFunction
+      CodeUri: ../src/lambda_orchestrator/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(1 day)' # Se ejecuta una vez al día
+
+  # (Definir las otras funciones Lambda: Collector, Analyzer, Notifier de manera similar)
+  # ...
+
+Outputs:
+  UserCVsBucketName:
+    Description: "Nombre del bucket S3 para los CVs"
+    Value: !Ref UserCVsBucket
