@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Search Agent - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- AWS Amplify JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/aws-amplify@5/dist/aws-amplify.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .card { background-color: white; border-radius: 0.75rem; padding: 2rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .btn-primary { background-color: #2563eb; color: white; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.2s; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .input-file-label { background-color: #e5e7eb; color: #374151; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; border: 1px solid #d1d5db; }
+        .input-file-label:hover { background-color: #d1d5db; }
+        #toast { position: fixed; bottom: 2rem; right: 2rem; background-color: #10b981; color: white; padding: 1rem 1.5rem; border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); transform: translateY(200%); transition: transform 0.3s ease-in-out; }
+        #toast.show { transform: translateY(0); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="flex flex-col sm:flex-row justify-between sm:items-center mb-10">
+            <div>
+                 <h1 class="text-3xl md:text-4xl font-bold text-gray-800">AI Job Search Agent</h1>
+                 <p class="text-sm text-gray-500 mt-1" id="user-email">Cargando...</p>
+            </div>
+            <button id="sign-out-btn" class="mt-4 sm:mt-0 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md w-full sm:w-auto">Sign Out</button>
+        </header>
+
+        <div class="space-y-8">
+            <!-- Profile Section -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">1. Tu Perfil Profesional</h2>
+                <div class="space-y-4">
+                     <div>
+                        <label for="full-name" class="block text-sm font-medium text-gray-700 mb-2">Tu Nombre Completo</label>
+                        <input type="text" id="full-name" class="w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Ej: Juan Manuel Ramírez Sosa">
+                    </div>
+                    <div>
+                        <label for="cv-upload" class="block text-sm font-medium text-gray-700 mb-2">Sube tu CV actualizado (PDF)</label>
+                        <input type="file" id="cv-upload" class="hidden" accept=".pdf">
+                        <label for="cv-upload" class="input-file-label">Seleccionar archivo</label>
+                        <span id="file-name" class="ml-3 text-sm text-gray-500">Ningún archivo seleccionado.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preferences Section -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">2. Tus Preferencias</h2>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Idioma</h3>
+                        <select id="language-pref" class="w-full border border-gray-300 rounded-md shadow-sm p-2">
+                            <option value="es">Español (para vacantes y mensajes)</option>
+                            <option value="en">Inglés (para vacantes y mensajes)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Frecuencia del Informe por Correo</h3>
+                        <div class="flex flex-wrap gap-x-6 gap-y-2">
+                            <label class="flex items-center"><input type="radio" name="frequency" value="daily" class="mr-2" checked> Diario</label>
+                            <label class="flex items-center"><input type="radio" name="frequency" value="eod" class="mr-2"> Cada 2 días</label>
+                            <label class="flex items-center"><input type="radio" name="frequency" value="weekly" class="mr-2"> Semanal</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Platforms Section -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">3. Plataformas a Monitorear</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50"><input type="checkbox" name="platform" value="linkedin" class="mr-3 h-5 w-5" checked> LinkedIn</label>
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50"><input type="checkbox" name="platform" value="occ" class="mr-3 h-5 w-5" checked> OCC Mundial</label>
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50"><input type="checkbox" name="platform" value="computrabajo" class="mr-3 h-5 w-5" checked> Computrabajo</label>
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50"><input type="checkbox" name="platform" value="indeed" class="mr-3 h-5 w-5"> Indeed</label>
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50"><input type="checkbox" name="platform" value="glassdoor" class="mr-3 h-5 w-5"> Glassdoor</label>
+                </div>
+            </div>
+
+            <!-- Status & Actions -->
+            <div class="text-center p-4 bg-gray-800 text-white rounded-lg">
+                <div class="mb-4">
+                    <p><strong>Estado del Agente:</strong> <span id="agent-status" class="text-yellow-400">Inactivo</span></p>
+                    <p class="text-sm">Próximo informe programado para: <span id="next-run">N/A</span></p>
+                </div>
+                <button id="save-config" class="btn-primary">Guardar Configuración y Activar Agente</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast">¡Configuración guardada!</div>
+    
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Amplify Configuration (should be the same as in auth.html) ---
+        const amplifyConfig = {
+            Auth: {
+                region: 'YOUR_AWS_REGION',
+                userPoolId: 'YOUR_USER_POOL_ID',
+                userPoolWebClientId: 'YOUR_USER_POOL_CLIENT_ID',
+                oauth: {
+                    domain: 'YOUR_COGNITO_DOMAIN',
+                    scope: ['email', 'openid', 'profile'],
+                    redirectSignIn: window.location.origin + '/dashboard.html',
+                    redirectSignOut: window.location.origin + '/auth.html',
+                    responseType: 'code'
+                }
+            }
+        };
+        Amplify.configure(amplifyConfig);
+
+        // --- DOM Elements ---
+        const userEmailSpan = document.getElementById('user-email');
+        const signOutBtn = document.getElementById('sign-out-btn');
+        const cvUpload = document.getElementById('cv-upload');
+        const fileNameSpan = document.getElementById('file-name');
+        const saveButton = document.getElementById('save-config');
+        const agentStatusSpan = document.getElementById('agent-status');
+        const nextRunSpan = document.getElementById('next-run');
+        const toast = document.getElementById('toast');
+        const fullNameInput = document.getElementById('full-name');
+        
+        let currentUser = null;
+
+        // --- Main Functions ---
+        async function checkUser() {
+            try {
+                currentUser = await Amplify.Auth.currentAuthenticatedUser();
+                userEmailSpan.textContent = `Sesión iniciada como: ${currentUser.attributes.email}`;
+                // Once user is verified, load their settings
+                loadUserSettings(currentUser.attributes.email);
+            } catch (error) {
+                // If no user is signed in, redirect to the auth page
+                window.location.href = '/auth.html';
+            }
+        }
+
+        async function loadUserSettings(email) {
+            // In a real application, you would fetch these settings from DynamoDB
+            // For now, we'll just pre-fill some fields based on the user info
+            console.log(`Fetching settings for ${email}...`);
+            // Example: Try to get name from Cognito attributes if available
+            fullNameInput.value = currentUser.attributes.name || '';
+            // You would then load and set frequency, platforms, etc.
+        }
+
+        async function saveUserSettings() {
+            // --- In a real application, this would send the data to the AWS backend ---
+            const userEmail = currentUser.attributes.email;
+            const cvFile = cvUpload.files.length > 0 ? cvUpload.files[0] : null;
+
+            if (!userEmail) {
+                showToast('Error: No se pudo identificar al usuario.', true);
+                return;
+            }
+
+            console.log('--- Saving Configuration for', userEmail, '---');
+            if (cvFile) {
+                console.log('CV to Upload:', cvFile.name);
+                // Here you would add logic to upload the file to S3
+            }
+            console.log('Full Name:', fullNameInput.value);
+            console.log('Language:', document.getElementById('language-pref').value);
+            
+            const frequency = document.querySelector('input[name="frequency"]:checked').value;
+            console.log('Frequency:', frequency);
+
+            const platforms = Array.from(document.querySelectorAll('input[name="platform"]:checked')).map(el => el.value);
+            console.log('Platforms:', platforms);
+            
+            // Update UI to show agent is active
+            agentStatusSpan.textContent = 'Activo';
+            agentStatusSpan.classList.remove('text-yellow-400');
+            agentStatusSpan.classList.add('text-green-400');
+            
+            const nextDate = new Date();
+            if(frequency === 'daily') nextDate.setDate(nextDate.getDate() + 1);
+            if(frequency === 'eod') nextDate.setDate(nextDate.getDate() + 2);
+            if(frequency === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
+            nextRunSpan.textContent = nextDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            
+            showToast('¡Configuración guardada!');
+        }
+        
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.style.backgroundColor = isError ? '#ef4444' : '#10b981';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Event Listeners ---
+        signOutBtn.addEventListener('click', async () => {
+            try {
+                await Amplify.Auth.signOut();
+                // This will automatically redirect to the signOut URL configured in Amplify
+            } catch (error) {
+                console.error('Error signing out: ', error);
+            }
+        });
+
+        cvUpload.addEventListener('change', () => {
+            fileNameSpan.textContent = cvUpload.files.length > 0 ? cvUpload.files[0].name : 'Ningún archivo seleccionado.';
+        });
+
+        saveButton.addEventListener('click', saveUserSettings);
+
+        // Check for user on page load
+        checkUser();
+    });
+</script>
+</body>
+</html>
+
