@@ -1,0 +1,6 @@
+{
+    "Parameters": {
+        "SESVerifiedIdentity": "tu-correo-verificado-en-ses@ejemplo.com",
+        "FrontendProdURL": "https://www.tu-dominio-de-produccion.com/auth.html"
+    }
+}
