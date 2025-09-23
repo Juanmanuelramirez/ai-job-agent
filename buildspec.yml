@@ -27,3 +27,5 @@ artifacts:
   files:
     # El archivo 'packaged.yaml' es el "artefacto" que la fase de Despliegue usará.
     - packaged.yaml
+    - parameter-config-prod.json
+    - parameter-config-staging.json
