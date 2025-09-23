@@ -2,14 +2,27 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   ai-job-agent
-  Complete infrastructure for the AI Job Search Agent, including Cognito authentication.
+  Infraestructura completa y parametrizada para el Agente de Búsqueda de Empleo con IA.
+
+Parameters:
+  SESVerifiedIdentity:
+    Type: String
+    Description: El correo o dominio verificado en SES para enviar los informes.
+  FrontendProdURL:
+    Type: String
+    Description: La URL de producción de tu frontend para las redirecciones de Cognito.
 
 Globals:
   Function:
     Timeout: 60
     Runtime: python3.9
     MemorySize: 256
-    # ... (rest of Globals section)
+    Environment:
+      Variables:
+        USER_SETTINGS_TABLE: !Ref UserSettingsTable
+        JOB_LEADS_TABLE: !Ref JobLeadsTable
+        CV_BUCKET_NAME: !Ref UserCVsBucket
+        RAW_JOBS_BUCKET_NAME: !Ref RawJobsBucket
 
 Resources:
   # --- Authentication ---
@@ -43,16 +56,134 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
         - Google
-        - Azure # Represents Microsoft
+        - Azure
       CallbackURLs:
-        - http://localhost:8080/dashboard.html # For local testing
-        - https://YOUR_PRODUCTION_URL/dashboard.html # IMPORTANT: Add your production URL here
+        - http://localhost:8080/dashboard.html
+        - !Ref FrontendProdURL
       LogoutURLs:
         - http://localhost:8080/auth.html
-        - https://YOUR_PRODUCTION_URL/auth.html
+        - !Ref FrontendProdURL
   
-  # --- S3 Buckets, DynamoDB Tables, and Lambda Functions from previous version ---
-  # ... (All your other resources like S3, DynamoDB, and Lambdas go here without changes)
+  # --- S3 Buckets ---
+  UserCVsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+  RawJobsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+
+  # --- DynamoDB Tables ---
+  UserSettingsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: UserSettings
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  JobLeadsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: JobLeads
+      AttributeDefinitions:
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: jobUrl
+          AttributeType: S
+        - AttributeName: relevanceScore
+          AttributeType: N
+      KeySchema:
+        - AttributeName: userEmail
+          KeyType: HASH
+        - AttributeName: jobUrl
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      GlobalSecondaryIndexes:
+        - IndexName: RelevanceScoreIndex
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: relevanceScore
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+
+  # --- Lambda Functions ---
+  OrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_orchestrator/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSettingsTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CollectorFunction
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(1 day)'
+
+  CollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_collector/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSettingsTable
+        - S3WritePolicy:
+            BucketName: !Ref RawJobsBucket
+
+  AnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_analyzer/
+      Handler: app.lambda_handler
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref RawJobsBucket
+        - DynamoDBWritePolicy:
+            TableName: !Ref JobLeadsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSettingsTable
+        - Statement:
+          - Effect: Allow
+            Action:
+              - comprehend:DetectEntities
+              - bedrock:InvokeModel
+            Resource: "*"
+      Events:
+        JobFileCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref RawJobsBucket
+            Events: s3:ObjectCreated:*
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_notifier/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobLeadsTable
+        - SESCrudPolicy:
+            IdentityName: !Ref SESVerifiedIdentity
 
 Outputs:
   Region:
