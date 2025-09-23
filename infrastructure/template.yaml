@@ -2,93 +2,108 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   ai-job-agent
-  Infraestructura para el Agente de Búsqueda de Empleo con IA
+  Complete infrastructure for the AI Job Search Agent.
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: python3.9
+    MemorySize: 256
+    Environment:
+      Variables:
+        USER_SETTINGS_TABLE: !Ref UserSettingsTable
+        JOB_LEADS_TABLE: !Ref JobLeadsTable
+        CV_BUCKET_NAME: !Ref UserCVsBucket
+        RAW_JOBS_BUCKET_NAME: !Ref RawJobsBucket
+        SENDER_EMAIL: "your-verified-email-in-ses@example.com" # IMPORTANT: Change this
 
 Resources:
   # --- S3 Buckets ---
   UserCVsBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "ai-job-agent-cvs-${AWS::AccountId}"
-      CorsConfiguration:
-        CorsRules:
-        - AllowedHeaders: ["*"]
-          AllowedMethods: ["PUT", "POST", "GET"]
-          AllowedOrigins: ["*"]
+  RawJobsBucket:
+    Type: AWS::S3::Bucket
 
   # --- DynamoDB Tables ---
   UserSettingsTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: AWS::DynamoDB::Table
     Properties:
       TableName: UserSettings
-      PrimaryKey:
-        Name: email
-        Type: String
+      AttributeDefinitions: [{AttributeName: email, AttributeType: S}]
+      KeySchema: [{AttributeName: email, KeyType: HASH}]
+      ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
 
   JobLeadsTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: AWS::DynamoDB::Table
     Properties:
       TableName: JobLeads
-      PrimaryKey:
-        Name: userEmail
-        Type: String
-      SecondaryIndexes:
-        - IndexName: jobUrl-index
-          PrimaryKey:
-            Name: jobUrl
-            Type: String
-
-  # --- IAM Roles and Policies ---
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaPermissions
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:Scan
-                  - s3:GetObject
-                  - s3:PutObject
-                  - comprehend:DetectEntities
-                  - bedrock:InvokeModel
-                  - ses:SendEmail
-                Resource: "*"
+      AttributeDefinitions:
+        - {AttributeName: userEmail, AttributeType: S}
+        - {AttributeName: jobUrl, AttributeType: S}
+        - {AttributeName: relevanceScore, AttributeType: N}
+      KeySchema:
+        - {AttributeName: userEmail, KeyType: HASH}
+        - {AttributeName: jobUrl, KeyType: RANGE}
+      ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
+      GlobalSecondaryIndexes:
+        - IndexName: RelevanceScoreIndex
+          KeySchema:
+            - {AttributeName: userEmail, KeyType: HASH}
+            - {AttributeName: relevanceScore, KeyType: RANGE}
+          Projection: {ProjectionType: ALL}
+          ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
 
   # --- Lambda Functions ---
   OrchestratorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: OrchestratorFunction
       CodeUri: ../src/lambda_orchestrator/
       Handler: app.lambda_handler
-      Runtime: python3.9
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 60
+      Policies:
+        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
+        - LambdaInvokePolicy: {FunctionName: !Ref CollectorFunction}
       Events:
         Schedule:
           Type: Schedule
           Properties:
-            Schedule: 'rate(1 day)' # Se ejecuta una vez al día
+            Schedule: 'rate(1 day)'
 
-  # (Definir las otras funciones Lambda: Collector, Analyzer, Notifier de manera similar)
-  # ...
+  CollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_collector/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
+        - S3WritePolicy: {BucketName: !Ref RawJobsBucket}
 
-Outputs:
-  UserCVsBucketName:
-    Description: "Nombre del bucket S3 para los CVs"
-    Value: !Ref UserCVsBucket
+  AnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_analyzer/
+      Handler: app.lambda_handler
+      Policies:
+        - S3ReadPolicy: {BucketName: !Ref RawJobsBucket}
+        - DynamoDBWritePolicy: {TableName: !Ref JobLeadsTable}
+        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
+        - Statement:
+          - Effect: Allow
+            Action: [comprehend:DetectEntities, bedrock:InvokeModel]
+            Resource: "*"
+      Events:
+        JobFileCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref RawJobsBucket
+            Events: s3:ObjectCreated:*
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/lambda_notifier/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy: {TableName: !Ref JobLeadsTable}
+        - SESCrudPolicy:
+            IdentityName: "your-verified-email-identity-in-ses" # IMPORTANT: Change this
+
