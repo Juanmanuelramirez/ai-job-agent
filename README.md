@@ -57,9 +57,9 @@ Este es el paso más importante para la automatización. Aquí centralizas tu co
 1. Ve a la consola de AWS y busca el servicio **Systems Manager**.  
 2. En el menú de la izquierda, ve a **"Parameter Store"**.  
 3. Haz clic en **"Crear parámetro"** y crea los siguientes tres parámetros:  
-   * **Parámetro 1: Identidad de SES**  
+   * **Parámetro 1: Identidad de SES (Remitente)**  
      * **Nombre:** /ai-job-agent/prod/ses-identity  
-     * **Tipo:** String  
+     * **Tipo:** String (o SecureString para mayor seguridad)  
      * **Valor:** tu-correo-verificado-en-ses@ejemplo.com  
      * Haz clic en **"Crear parámetro"**.  
    * **Parámetro 2: URL del Frontend**  
@@ -88,7 +88,7 @@ Aquí es donde conectamos el pipeline con Parameter Store.
 2. Haz clic en **"Crear proyecto"**.  
    * **Nombre del proyecto:** AI-Job-Agent-Build-Prod.  
    * **Entorno:** Elige una imagen de Amazon Linux 2 estándar, runtime Python 3.9.  
-   * **Rol de servicio:** Nuevo rol de servicio. **¡Importante\!** Después de crear el rol, tendrás que añadirle permisos para leer desde Parameter Store.  
+   * **Rol de servicio:** Nuevo rol de servicio. **¡Importante\!** Después de crear el rol, tendrás que ir a IAM y añadirle permisos para leer desde Parameter Store (ssm:GetParameter).  
    * **Buildspec:** Deja la opción por defecto ("Usar un archivo buildspec").  
    * **Variables de Entorno (Sección Avanzada):** Aquí está la magia.  
      * Haz clic en "Añadir variable de entorno".  
@@ -117,5 +117,3 @@ Aquí es donde conectamos el pipeline con Parameter Store.
   "FrontendProdURL" : "#{BuildVariables.FRONTEND_URL}"
 }
 ```
-
-
