@@ -1,0 +1,29 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # AWS SAM CLI ya está preinstalado en los entornos de CodeBuild.
+      - echo "Fase de Instalación: SAM CLI está listo."
+
+  build:
+    commands:
+      - echo "Iniciando la fase de Build..."
+      # El comando 'sam build' prepara el código de las Lambdas para el empaquetado.
+      # Lee el archivo template.yaml y crea los artefactos de despliegue.
+      - sam build
+
+  post_build:
+    commands:
+      - echo "Iniciando la fase de Post-Build..."
+      # El comando 'sam package' sube los artefactos a un bucket de S3 y
+      # genera un nuevo archivo de plantilla (packaged.yaml) con las referencias correctas.
+      # Necesitarás crear un bucket de S3 para almacenar los artefactos.
+      - sam package --output-template-file packaged.yaml --s3-bucket tu-bucket-para-artefactos-de-pipeline
+
+artifacts:
+  files:
+    # El archivo 'packaged.yaml' es el "artefacto" que la fase de Despliegue usará.
+    - packaged.yaml
