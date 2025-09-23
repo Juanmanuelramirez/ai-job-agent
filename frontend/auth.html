@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Search Agent - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- AWS Amplify JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/aws-amplify@5/dist/aws-amplify.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .form-container { display: none; }
+        .form-container.active { display: block; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">AI Job Search Agent</h1>
+
+        <!-- Social Logins -->
+        <div class="space-y-3 mb-6">
+            <button id="google-signin" class="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <svg class="w-5 h-5 mr-2" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v8.51h12.8c-.57 2.82-2.31 5.21-4.78 6.81l7.98 6.19C45.27 38.64 48 32.1 48 24c0-.62-.05-1.23-.12-1.84h-.06z"></path><path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.98-6.19c-2.11 1.45-4.82 2.3-7.91 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                Sign in with Google
+            </button>
+            <button id="microsoft-signin" class="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23"><path fill="#f3f3f3" d="M0 0h23v23H0z"/><path fill="#F35325" d="M1 1h10v10H1z"/><path fill="#81BC06" d="M12 1h10v10H12z"/><path fill="#05A6F0" d="M1 12h10v10H1z"/><path fill="#FFBA08" d="M12 12h10v10H12z"/></svg>
+                Sign in with Microsoft
+            </button>
+        </div>
+
+        <div class="relative flex py-2 items-center">
+            <div class="flex-grow border-t border-gray-300"></div>
+            <span class="flex-shrink mx-4 text-gray-400 text-xs">OR</span>
+            <div class="flex-grow border-t border-gray-300"></div>
+        </div>
+
+        <!-- Email Forms -->
+        <div id="login-form" class="form-container active mt-4">
+            <form id="login-form-inner">
+                <input type="email" id="login-email" placeholder="Email" required class="w-full border border-gray-300 rounded-md p-2 mb-3">
+                <input type="password" id="login-password" placeholder="Password" required class="w-full border border-gray-300 rounded-md p-2 mb-4">
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Sign In</button>
+            </form>
+            <p class="text-center text-sm mt-4">Don't have an account? <a href="#" id="show-signup" class="text-blue-600 hover:underline">Sign up</a></p>
+        </div>
+
+        <div id="signup-form" class="form-container mt-4">
+             <form id="signup-form-inner">
+                <input type="email" id="signup-email" placeholder="Email" required class="w-full border border-gray-300 rounded-md p-2 mb-3">
+                <input type="password" id="signup-password" placeholder="Password" required class="w-full border border-gray-300 rounded-md p-2 mb-4">
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Sign Up</button>
+            </form>
+            <p class="text-center text-sm mt-4">Already have an account? <a href="#" id="show-login" class="text-blue-600 hover:underline">Sign in</a></p>
+        </div>
+        
+        <div id="confirm-signup-form" class="form-container mt-4">
+             <form id="confirm-signup-form-inner">
+                <p class="text-center text-sm mb-3">We sent a confirmation code to your email. Please enter it below.</p>
+                <input type="text" id="confirmation-code" placeholder="Confirmation Code" required class="w-full border border-gray-300 rounded-md p-2 mb-4">
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Confirm Sign Up</button>
+            </form>
+        </div>
+
+        <p id="error-message" class="text-red-500 text-sm text-center mt-4"></p>
+
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Amplify Configuration ---
+        // IMPORTANT: These values will be populated by your backend after deployment.
+        const amplifyConfig = {
+            Auth: {
+                region: 'YOUR_AWS_REGION', // e.g., 'us-east-1'
+                userPoolId: 'YOUR_USER_POOL_ID',
+                userPoolWebClientId: 'YOUR_USER_POOL_CLIENT_ID',
+                oauth: {
+                    domain: 'YOUR_COGNITO_DOMAIN', // e.g., 'ai-job-agent.auth.us-east-1.amazoncognito.com'
+                    scope: ['email', 'openid', 'profile'],
+                    redirectSignIn: window.location.origin + '/dashboard.html',
+                    redirectSignOut: window.location.origin + '/auth.html',
+                    responseType: 'code'
+                }
+            }
+        };
+        Amplify.configure(amplifyConfig);
+        
+        // --- DOM Elements ---
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const confirmSignupForm = document.getElementById('confirm-signup-form');
+        const errorMessage = document.getElementById('error-message');
+        let emailToConfirm = '';
+
+        // --- Event Listeners ---
+        document.getElementById('google-signin').addEventListener('click', () => Amplify.Auth.federatedSignIn({ provider: 'Google' }));
+        document.getElementById('microsoft-signin').addEventListener('click', () => Amplify.Auth.federatedSignIn({ provider: 'AzureAD' })); // Use 'AzureAD' for Microsoft
+
+        document.getElementById('show-signup').addEventListener('click', (e) => { e.preventDefault(); showForm('signup-form'); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); showForm('login-form'); });
+
+        document.getElementById('signup-form-inner').addEventListener('submit', handleSignUp);
+        document.getElementById('login-form-inner').addEventListener('submit', handleSignIn);
+        document.getElementById('confirm-signup-form-inner').addEventListener('submit', handleConfirmSignUp);
+
+        // --- Functions ---
+        function showForm(formId) {
+            document.querySelectorAll('.form-container').forEach(form => form.classList.remove('active'));
+            document.getElementById(formId).classList.add('active');
+            errorMessage.textContent = '';
+        }
+        
+        async function handleSignUp(e) {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            emailToConfirm = email;
+            try {
+                await Amplify.Auth.signUp({ username: email, password });
+                showForm('confirm-signup-form');
+            } catch (error) {
+                errorMessage.textContent = error.message;
+            }
+        }
+
+        async function handleConfirmSignUp(e) {
+            e.preventDefault();
+            const code = document.getElementById('confirmation-code').value;
+            try {
+                await Amplify.Auth.confirmSignUp(emailToConfirm, code);
+                // Automatically sign them in after confirmation
+                await handleSignIn(e, emailToConfirm, document.getElementById('signup-password').value);
+            } catch (error) {
+                errorMessage.textContent = error.message;
+            }
+        }
+
+        async function handleSignIn(e, emailOverride, passwordOverride) {
+            e.preventDefault();
+            const email = emailOverride || document.getElementById('login-email').value;
+            const password = passwordOverride || document.getElementById('login-password').value;
+            try {
+                await Amplify.Auth.signIn(email, password);
+                window.location.href = '/dashboard.html';
+            } catch (error) {
+                errorMessage.textContent = error.message;
+            }
+        }
+    });
+</script>
+</body>
+</html>
+
