@@ -2,77 +2,84 @@ import boto3
 import os
 from boto3.dynamodb.conditions import Key
 
-# --- Configuración ---
+# --- Configuration ---
 JOB_LEADS_TABLE = os.environ.get('JOB_LEADS_TABLE_NAME', 'JobLeads')
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'tu-correo-verificado-en-ses@example.com')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'your-verified-email-in-ses@example.com')
 
-# Inicializar clientes de AWS.
+# Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
 table = dynamodb.Table(JOB_LEADS_TABLE)
 
 def generate_html_email(user_email, top_jobs):
-    """Genera el contenido HTML del correo de informe."""
-    body_html = f"<html><body><h1>Hola {user_email.split('@')[0]},</h1>"
-    body_html += "<p>Tu agente de IA ha analizado el mercado. Aquí están las mejores oportunidades para ti hoy:</p>"
+    """Generates the HTML content for the report email."""
+    # This function remains the same as your original version.
+    # ... (omitted for brevity, assume it's the same as your file)
+    # For this example, we'll create a simplified version
+    body_html = f"<html><body><h1>Hi {user_email.split('@')[0]},</h1>"
+    body_html += "<p>Your AI agent has analyzed the market. Here are your top opportunities today:</p>"
     
     for job in top_jobs:
-        body_html += f"<hr><h2>{job.get('title', 'Sin Título')} @ {job.get('company', 'Sin Compañía')}</h2>"
-        body_html += f"<p><b>URL Validada:</b> <a href='{job['jobUrl']}'>{job['jobUrl']}</a></p>"
-        body_html += f"<p><b>Puntuación de Relevancia:</b> {job.get('relevanceScore', 'N/A')}%</p>"
-        body_html += "<h3>Análisis de IA:</h3>"
-        # Formatear el análisis de IA para HTML.
-        analysis_html = job.get('aiAnalysis', 'No disponible.').replace('\n', '<br>')
-        body_html += f"<div style='background-color:#f0f0f0; padding:10px; border-radius:5px;'>{analysis_html}</div>"
+        analysis_html = job.get('aiAnalysis', 'Not available.').replace('\n', '<br>')
+        body_html += (
+            f"<hr>"
+            f"<h2>{job.get('title', 'No Title')} @ {job.get('company', 'No Company')}</h2>"
+            f"<p><b>Validated URL:</b> <a href='{job['jobUrl']}'>{job['jobUrl']}</a></p>"
+            f"<p><b>Relevance Score:</b> {job.get('relevanceScore', 'N/A')}%</p>"
+            f"<h3>AI Analysis:</h3>"
+            f"<div style='background-color:#f0f0f0; padding:10px; border-radius:5px;'>{analysis_html}</div>"
+        )
 
-    body_html += "<br><p>¡Mucha suerte con tus aplicaciones!</p></body></html>"
+    body_html += "<br><p>Good luck with your applications!</p></body></html>"
     return body_html
+
 
 def lambda_handler(event, context):
     """
-    Handler principal. Puede ser invocado por el orquestador al final del día.
+    This handler queries DynamoDB for the top job leads and sends an email.
     """
     user_email = event.get('user_email')
     if not user_email:
-        return {'statusCode': 400, 'body': 'Falta el correo del usuario.'}
+        print("Error: user_email not provided in the event.")
+        return {'statusCode': 400, 'body': 'User email is missing.'}
         
-    print(f"Preparando informe para: {user_email}")
+    print(f"Preparing report for: {user_email}")
 
-    # 1. Consultar DynamoDB para obtener las mejores vacantes para el usuario.
     try:
+        # --- IMPROVED QUERY ---
+        # This query now uses the Global Secondary Index for efficient sorting.
         response = table.query(
+            IndexName='RelevanceScoreIndex',
             KeyConditionExpression=Key('userEmail').eq(user_email),
-            # Ordenar por puntuación de relevancia de mayor a menor.
-            ScanIndexForward=False, 
-            # Limitamos a las 5 mejores.
-            Limit=5 
-            # Se necesitaría un Índice Secundario Global en 'relevanceScore' para ordenar así.
-            # Por simplicidad, aquí obtenemos los últimos 5 y los ordenamos en Python.
+            ScanIndexForward=False,  # Sorts relevanceScore in descending order (highest first)
+            Limit=5
         )
-        top_jobs = sorted(response.get('Items', []), key=lambda x: x.get('relevanceScore', 0), reverse=True)
+        top_jobs = response.get('Items', [])
+        
     except Exception as e:
-        print(f"Error al consultar DynamoDB: {e}")
-        return {'statusCode': 500, 'body': 'Error de base de datos.'}
+        print(f"Error querying DynamoDB with GSI: {e}")
+        return {'statusCode': 500, 'body': 'Database query error.'}
 
     if not top_jobs:
-        print(f"No se encontraron vacantes de alta relevancia para {user_email}. No se enviará correo.")
-        return {'statusCode': 200, 'body': 'No hay informe que enviar.'}
+        print(f"No high-relevance jobs found for {user_email}. No email will be sent.")
+        return {'statusCode': 200, 'body': 'No report to send.'}
 
-    # 2. Generar y enviar el correo.
-    email_html = generate_html_email(user_email, top_jobs)
+    # Generate and send the email
+    email_html_body = generate_html_email(user_email, top_jobs)
     
     try:
         ses.send_email(
             Source=SENDER_EMAIL,
             Destination={'ToAddresses': [user_email]},
             Message={
-                'Subject': {'Data': 'Tu Informe Diario de Empleo con IA'},
-                'Body': {'Html': {'Data': email_html}}
+                'Subject': {'Data': 'Your Daily AI Job Report'},
+                'Body': {'Html': {'Data': email_html_body}}
             }
         )
-        print(f"Correo de informe enviado exitosamente a {user_email}.")
+        print(f"Report email sent successfully to {user_email}.")
     except Exception as e:
-        print(f"Error al enviar correo con SES: {e}")
-        return {'statusCode': 500, 'body': 'Error al enviar correo.'}
+        print(f"Error sending email with SES: {e}")
+        return {'statusCode': 500, 'body': 'Error sending email.'}
 
-    return {'statusCode': 200, 'body': 'Informe enviado.'}
+    return {'statusCode': 200, 'body': 'Report sent successfully.'}
+
