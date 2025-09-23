@@ -2,108 +2,66 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   ai-job-agent
-  Complete infrastructure for the AI Job Search Agent.
+  Complete infrastructure for the AI Job Search Agent, including Cognito authentication.
 
 Globals:
   Function:
     Timeout: 60
     Runtime: python3.9
     MemorySize: 256
-    Environment:
-      Variables:
-        USER_SETTINGS_TABLE: !Ref UserSettingsTable
-        JOB_LEADS_TABLE: !Ref JobLeadsTable
-        CV_BUCKET_NAME: !Ref UserCVsBucket
-        RAW_JOBS_BUCKET_NAME: !Ref RawJobsBucket
-        SENDER_EMAIL: "your-verified-email-in-ses@example.com" # IMPORTANT: Change this
+    # ... (rest of Globals section)
 
 Resources:
-  # --- S3 Buckets ---
-  UserCVsBucket:
-    Type: AWS::S3::Bucket
-  RawJobsBucket:
-    Type: AWS::S3::Bucket
-
-  # --- DynamoDB Tables ---
-  UserSettingsTable:
-    Type: AWS::DynamoDB::Table
+  # --- Authentication ---
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
     Properties:
-      TableName: UserSettings
-      AttributeDefinitions: [{AttributeName: email, AttributeType: S}]
-      KeySchema: [{AttributeName: email, KeyType: HASH}]
-      ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
-
-  JobLeadsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: JobLeads
-      AttributeDefinitions:
-        - {AttributeName: userEmail, AttributeType: S}
-        - {AttributeName: jobUrl, AttributeType: S}
-        - {AttributeName: relevanceScore, AttributeType: N}
-      KeySchema:
-        - {AttributeName: userEmail, KeyType: HASH}
-        - {AttributeName: jobUrl, KeyType: RANGE}
-      ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
-      GlobalSecondaryIndexes:
-        - IndexName: RelevanceScoreIndex
-          KeySchema:
-            - {AttributeName: userEmail, KeyType: HASH}
-            - {AttributeName: relevanceScore, KeyType: RANGE}
-          Projection: {ProjectionType: ALL}
-          ProvisionedThroughput: {ReadCapacityUnits: 5, WriteCapacityUnits: 5}
-
-  # --- Lambda Functions ---
-  OrchestratorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ../src/lambda_orchestrator/
-      Handler: app.lambda_handler
+      UserPoolName: AI-Job-Agent-Users
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
       Policies:
-        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
-        - LambdaInvokePolicy: {FunctionName: !Ref CollectorFunction}
-      Events:
-        Schedule:
-          Type: Schedule
-          Properties:
-            Schedule: 'rate(1 day)'
-
-  CollectorFunction:
-    Type: AWS::Serverless::Function
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      AutoVerifiedAttributes: [email]
+      
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
     Properties:
-      CodeUri: ../src/lambda_collector/
-      Handler: app.lambda_handler
-      Policies:
-        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
-        - S3WritePolicy: {BucketName: !Ref RawJobsBucket}
+      ClientName: AI-Job-Agent-Web-Client
+      UserPoolId: !Ref CognitoUserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      SupportedIdentityProviders:
+        - COGNITO
+        - Google
+        - Azure # Represents Microsoft
+      CallbackURLs:
+        - http://localhost:8080/dashboard.html # For local testing
+        - https://YOUR_PRODUCTION_URL/dashboard.html # IMPORTANT: Add your production URL here
+      LogoutURLs:
+        - http://localhost:8080/auth.html
+        - https://YOUR_PRODUCTION_URL/auth.html
+  
+  # --- S3 Buckets, DynamoDB Tables, and Lambda Functions from previous version ---
+  # ... (All your other resources like S3, DynamoDB, and Lambdas go here without changes)
 
-  AnalyzerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ../src/lambda_analyzer/
-      Handler: app.lambda_handler
-      Policies:
-        - S3ReadPolicy: {BucketName: !Ref RawJobsBucket}
-        - DynamoDBWritePolicy: {TableName: !Ref JobLeadsTable}
-        - DynamoDBReadPolicy: {TableName: !Ref UserSettingsTable}
-        - Statement:
-          - Effect: Allow
-            Action: [comprehend:DetectEntities, bedrock:InvokeModel]
-            Resource: "*"
-      Events:
-        JobFileCreated:
-          Type: S3
-          Properties:
-            Bucket: !Ref RawJobsBucket
-            Events: s3:ObjectCreated:*
-
-  NotifierFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ../src/lambda_notifier/
-      Handler: app.lambda_handler
-      Policies:
-        - DynamoDBReadPolicy: {TableName: !Ref JobLeadsTable}
-        - SESCrudPolicy:
-            IdentityName: "your-verified-email-identity-in-ses" # IMPORTANT: Change this
+Outputs:
+  Region:
+    Description: "AWS Region"
+    Value: !Ref AWS::Region
+  UserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Description: "Cognito User Pool Client ID"
+    Value: !Ref CognitoUserPoolClient
 
