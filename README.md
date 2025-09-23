@@ -41,79 +41,60 @@ This project is built to be deployed using the AWS SAM CLI and an AWS CodePipeli
 
 
 
-# **Guía de Despliegue Automatizado con AWS Parameter Store**
+# Guía de Despliegue Unificada para el Agente de IA
 
-Esta guía describe el método profesional para desplegar tu aplicación. Usaremos **AWS Systems Manager (SSM) Parameter Store** para gestionar las variables de entorno de forma segura y **AWS CodePipeline** para la automatización.
+Esta guía contiene las instrucciones para desplegar tu aplicación usando tanto el método manual (AWS SAM CLI) como el automatizado (AWS CodePipeline).
 
-### **Prerrequisitos**
+---
 
-1. **Repositorio de Código:** Tu proyecto en GitHub (o similar) con el buildspec.yml actualizado que te he proporcionado.  
-2. **Bucket de S3 para Artefactos:** Un bucket de S3 creado para almacenar los paquetes de código (ej. mi-agente-ia-artefactos).
+### Opción 1: Despliegue Manual con AWS SAM CLI (Para Pruebas Rápidas)
 
-### **Paso 1: Configurar las Variables en Parameter Store**
+Sigue estos pasos desde una terminal en la raíz de tu proyecto.
 
-Este es el paso más importante para la automatización. Aquí centralizas tu configuración.
+#### Prerrequisitos
+1.  Tener instalado **AWS SAM CLI**.
+2.  Tener configuradas tus **credenciales de AWS** en tu máquina.
+3.  Haber creado tus **parámetros en AWS Systems Manager Parameter Store**.
+4.  Tener un **bucket de S3** para los artefactos.
 
-1. Ve a la consola de AWS y busca el servicio **Systems Manager**.  
-2. En el menú de la izquierda, ve a **"Parameter Store"**.  
-3. Haz clic en **"Crear parámetro"** y crea los siguientes tres parámetros:  
-   * **Parámetro 1: Identidad de SES (Remitente)**  
-     * **Nombre:** /ai-job-agent/prod/ses-identity  
-     * **Tipo:** String (o SecureString para mayor seguridad)  
-     * **Valor:** tu-correo-verificado-en-ses@ejemplo.com  
-     * Haz clic en **"Crear parámetro"**.  
-   * **Parámetro 2: URL del Frontend**  
-     * **Nombre:** /ai-job-agent/prod/frontend-url  
-     * **Tipo:** String  
-     * **Valor:** https://www.tu-dominio-de-produccion.com/auth.html  
-     * Haz clic en **"Crear parámetro"**.  
-   * **Parámetro 3: Bucket de Artefactos**  
-     * **Nombre:** /ai-job-agent/prod/artifact-bucket  
-     * **Tipo:** String  
-     * **Valor:** El nombre de tu bucket de S3 para artefactos (ej. mi-agente-ia-artefactos).  
-     * Haz clic en **"Crear parámetro"**.
+#### Pasos de Despliegue
 
-### **Paso 2: Crear el Pipeline**
+1.  **Instalar Dependencias (si es necesario):**
+    ```bash
+    # (Solo la primera vez)
+    # pip install -r src/lambda_orchestrator/requirements.txt
+    # ... y así para cada lambda
+    ```
 
-Sigue los pasos del asistente de CodePipeline como antes.
+2.  **Construir el Proyecto:**
+    ```bash
+    sam build
+    ```
 
-1. **Iniciar el Asistente:** Ve a **CodePipeline**, haz clic en "Crear pipeline", dale un nombre y crea un nuevo rol de servicio.  
-2. **Fase de Origen (Source):** Conecta tu repositorio de GitHub y selecciona la rama main.
+3.  **Desplegar la Aplicación (Modo Guiado):**
+    ```bash
+    sam deploy --guided
+    ```
+    SAM te hará una serie de preguntas. Responde de la siguiente manera:
+    * **Stack Name:** `AI-Job-Agent-Prod-Stack`
+    * **AWS Region:** La región donde quieres desplegar (ej. `us-east-1`).
+    * **Parameter SESVerifiedIdentity:** Pega el valor de tu identidad de correo verificada.
+    * **Parameter FrontendBucketName:** Escribe el nombre que elegiste para tu bucket de frontend.
+    * **Confirm changes before deploy:** `y`
+    * **Allow SAM CLI IAM role creation:** `y`
+    * **Save arguments to samconfig.toml:** `y` (Esto guardará tus respuestas para futuros despliegues).
 
-### **Paso 3: Configurar la Fase de Build (Con Variables Automatizadas)**
+    Después del primer despliegue guiado, las próximas veces solo necesitarás ejecutar `sam deploy`.
 
-Aquí es donde conectamos el pipeline con Parameter Store.
+---
 
-1. **Proveedor de compilación:** Elige **AWS CodeBuild**.  
-2. Haz clic en **"Crear proyecto"**.  
-   * **Nombre del proyecto:** AI-Job-Agent-Build-Prod.  
-   * **Entorno:** Elige una imagen de Amazon Linux 2 estándar, runtime Python 3.9.  
-   * **Rol de servicio:** Nuevo rol de servicio. **¡Importante\!** Después de crear el rol, tendrás que ir a IAM y añadirle permisos para leer desde Parameter Store (ssm:GetParameter).  
-   * **Buildspec:** Deja la opción por defecto ("Usar un archivo buildspec").  
-   * **Variables de Entorno (Sección Avanzada):** Aquí está la magia.  
-     * Haz clic en "Añadir variable de entorno".  
-     * **Nombre:** SES\_IDENTITY  
-     * **Valor:** /ai-job-agent/prod/ses-identity  
-     * **Tipo:** Parameter Store  
-     * Repite este proceso para las otras dos variables:  
-       * FRONTEND\_URL \-\> /ai-job-agent/prod/frontend-url  
-       * ARTIFACT\_BUCKET \-\> /ai-job-agent/prod/artifact-bucket  
-3. Haz clic en **"Continuar a CodePipeline"** y luego en **"Siguiente"**.
+### Opción 2: Despliegue Automatizado con AWS CodePipeline (La Solución Profesional)
 
-### **Paso 4: Configurar la Fase de Despliegue (Deploy)**
+Sigue la guía que te proporcioné anteriormente, que he verificado y está completa. Es el documento llamado **`Guia_Despliegue_Pipeline_v3.md`**. Te guiará paso a paso para:
 
-1. **Proveedor de despliegue:** Elige **AWS CloudFormation**.  
-2. **Acción:** Crear o actualizar una pila.  
-3. **Nombre de la pila:** AI-Job-Agent-Prod-Stack.  
-4. **Nombre de artefacto:** BuildArtifact.  
-5. **Nombre de archivo:** packaged.yaml.  
-6. **Modo de plantilla:** Parámetros.  
-7. **Anulaciones de parámetros (Parameter overrides):** Aquí le pasas los valores desde CodeBuild a CloudFormation.  
-   * En la sección "Anulaciones de parámetros", escribe:
+1.  **Configurar tus variables** en Parameter Store.
+2.  **Crear el Pipeline** en la consola de AWS.
+3.  **Configurar la Fase de Build** para que lea automáticamente tus variables.
+4.  **Configurar la Fase de Deploy** para desplegar tu stack de CloudFormation de forma segura.
 
-```
-{
-  "SESVerifiedIdentity" : "#{BuildVariables.SES_IDENTITY}",
-  "FrontendProdURL" : "#{BuildVariables.FRONTEND_URL}"
-}
-```
+Este método es la culminación de todo nuestro trabajo y la forma en que se gestionan los proyectos serios en la nube.
