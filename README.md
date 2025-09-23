@@ -39,4 +39,3 @@ After deployment, you must update the amplifyConfig object in frontend/auth.html
 
 This project is built to be deployed using the AWS SAM CLI and an AWS CodePipeline. Follow the Guia\_Despliegue\_Pipeline.md for instructions.
 
-1. 
