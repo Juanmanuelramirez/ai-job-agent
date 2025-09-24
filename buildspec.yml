@@ -1,29 +1,36 @@
 version: 0.2
 
 env:
-  parameter-store:
-    SES_IDENTITY: "/ai-job-agent/prod/ses-identity"
-    ARTIFACT_BUCKET: "/ai-job-agent/prod/artifact-bucket"
-    FRONTEND_BUCKET_NAME: "/ai-job-agent/prod/frontend-bucket-name" # Nueva variable
-
+  variables:
+    AWS_ACCOUNT_ID: "198449458161"
+    AWS_DEFAULT_REGION: "us-east-2"
 phases:
   install:
-    # ... (sin cambios) ...
-
+    commands:
+      - echo "Instalando dependencias..."
+      - pip install -r src/requirements.txt
+      - cd frontend && npm ci && cd ..
+  pre_build:
+    commands:
+      - echo "Login ECR"
+      - aws --version
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
   build:
-    # ... (sin cambios) ...
-
+    commands:
+      - echo "Tests backend"
+      - pytest -q src/tests || exit 1
+      - echo "Build backend image"
+      - docker build -t ai-job-agent-backend:latest -f src/Dockerfile src/
+      - docker tag ai-job-agent-backend:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/ai-job-agent-backend:latest
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/ai-job-agent-backend:latest
+      - echo "Build frontend"
+      - cd frontend && npm run build
+      - cd ..
   post_build:
     commands:
-      - echo "Iniciando la fase de Post-Build..."
-      # 1. Empaquetar el backend (Lambdas)
-      - sam package --output-template-file packaged.yaml --s3-bucket ${ARTIFACT_BUCKET}
-      # 2. Desplegar los archivos del frontend al bucket de S3
-      - echo "Desplegando archivos del frontend a S3..."
-      - aws s3 sync frontend/ s3://${FRONTEND_BUCKET_NAME}/ --delete
-
+      - echo "Empaquetando artefactos infra"
+      - aws cloudformation package --template-file infrastructure/template.yaml --s3-bucket ai-job-agent-artifacts-$AWS_ACCOUNT_ID --output-template-file packaged-template.yaml
 artifacts:
   files:
-    - packaged.yaml
-
-
+    - packaged-template.yaml
+    - frontend/build/**/*
