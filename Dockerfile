@@ -2,8 +2,6 @@
 FROM python:3.11-slim
 
 # 2. Instalar las dependencias a nivel de sistema operativo necesarias para compilar faiss-cpu.
-# build-essential: Contiene compiladores como gcc.
-# libomp-dev: Es una dependencia crítica para FAISS.
 RUN apt-get update && apt-get install -y \
     build-essential \
     libomp-dev \
@@ -24,3 +22,4 @@ EXPOSE 8080
 
 # 7. El comando para ejecutar la aplicación cuando el contenedor inicie.
 CMD ["streamlit", "run", "main.py", "--server.port=8080", "--server.headless=true"]
+
