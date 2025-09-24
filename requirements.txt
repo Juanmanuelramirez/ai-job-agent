@@ -1,7 +1,6 @@
 streamlit
 openai
-boto3
-PyPDF2
-langchain
 faiss-cpu
-tiktoken
+langchain
+pandas
+numpy
