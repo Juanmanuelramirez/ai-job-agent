@@ -1,27 +1,25 @@
 # Versión del esquema del archivo de configuración de App Runner
 version: 1.0
 
-# Define el entorno de ejecución que App Runner debe usar
+# Define el entorno de ejecución que App Runner debe usar.
+# Esto asegura que el contenedor de construcción tenga Python y pip preinstalados.
 runtime: python3.11
 
 # Comandos que se ejecutarán para construir la aplicación
 build:
   commands:
-    # Instala las dependencias definidas en requirements.txt
+    # Comando para instalar las dependencias
     build:
       - pip install -r requirements.txt
 
 # Comando para iniciar la aplicación y el puerto que expondrá
 run:
-  # Inicia Streamlit en el puerto 8080, que es el estándar para App Runner
-  # --server.headless es crucial para que Streamlit se ejecute correctamente en un contenedor
+  # Inicia Streamlit en el puerto 8080 y en modo headless, crucial para contenedores
   command: streamlit run main.py --server.port 8080 --server.headless true
   port: 8080
 
-# Configuración de la comprobación de estado para que App Runner sepa si la app está saludable
+# Comprobación de estado para que App Runner sepa si la app está saludable
 healthcheck:
-  # Ruta específica de Streamlit para comprobar la salud de la aplicación
   path: /_stcore/health
-  # Intervalo y tiempo de espera para las comprobaciones
   interval: 10
   timeout: 5
